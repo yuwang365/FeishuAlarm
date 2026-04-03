@@ -196,8 +196,7 @@ class MainActivity : ComponentActivity() {
                                 alarmTimes = AlarmHelper.getAlarmTimes(this)
                             },
                             onOpenFeishu = {
-                                AlarmActionHandler.sendReminderNotification(this,"tt")
-//                                FeishuLauncher.openFeishu(this)
+                                FeishuLauncher.openFeishu(this)
                                            },
                             onCheckPermissions = {
                                 requestForegroundPermissions()
