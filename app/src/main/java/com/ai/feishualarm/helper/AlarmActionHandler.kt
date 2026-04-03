@@ -20,7 +20,7 @@ import androidx.core.net.toUri
 
 object AlarmActionHandler {
     private const val TAG = "AlarmActionHandler"
-    private const val REMINDER_CHANNEL_ID = "FeishuReminderChannel_v6"
+    private const val REMINDER_CHANNEL_ID = "FeishuReminderChannel_v8"
     private const val NOTIFICATION_ID = 2
     private const val ALARM_PREFS = "AlarmPrefs"
     private const val PENDING_OPEN_FEISHU_KEY = "PENDING_OPEN_FEISHU"
@@ -46,7 +46,7 @@ object AlarmActionHandler {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 //        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-        val soundUri = ("android.resource://" + context.packageName + "/" + R.raw.alarm).toUri()
+        val soundUri = ("android.resource://" + context.packageName + "/" + R.raw.alarm_goodmorning).toUri()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
