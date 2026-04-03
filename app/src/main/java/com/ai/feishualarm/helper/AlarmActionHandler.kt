@@ -9,12 +9,14 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.ai.feishualarm.R
 import com.ai.feishualarm.ui.page.MainActivity
+import androidx.core.net.toUri
 
 object AlarmActionHandler {
     private const val TAG = "AlarmActionHandler"
@@ -40,10 +42,11 @@ object AlarmActionHandler {
         }
     }
 
-    private fun sendReminderNotification(context: Context, time: String) {
+    fun sendReminderNotification(context: Context, time: String) {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+//        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val soundUri = ("android.resource://" + context.packageName + "/" + R.raw.alarm).toUri()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(

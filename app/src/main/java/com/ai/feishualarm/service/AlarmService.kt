@@ -252,8 +252,8 @@ class AlarmService : Service() {
             providers.forEach { provider ->
                 manager.requestLocationUpdates(
                     provider,
-                    5_000L,
-                    5f,
+                    1_000L,
+                    0.1f,
                     locationListener!!,
                     mainLooper
                 )

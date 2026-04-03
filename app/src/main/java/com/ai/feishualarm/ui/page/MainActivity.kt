@@ -63,6 +63,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.ai.feishualarm.helper.AlarmActionHandler
 import com.ai.feishualarm.helper.AlarmHelper
 import com.ai.feishualarm.helper.FeishuLauncher
 import com.ai.feishualarm.helper.LocationHelper
@@ -194,7 +195,10 @@ class MainActivity : ComponentActivity() {
                                 AlarmHelper.removeAlarmTime(this, time)
                                 alarmTimes = AlarmHelper.getAlarmTimes(this)
                             },
-                            onOpenFeishu = { FeishuLauncher.openFeishu(this) },
+                            onOpenFeishu = {
+                                AlarmActionHandler.sendReminderNotification(this,"tt")
+//                                FeishuLauncher.openFeishu(this)
+                                           },
                             onCheckPermissions = {
                                 requestForegroundPermissions()
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
@@ -412,8 +416,8 @@ class MainActivity : ComponentActivity() {
             providers.forEach { provider ->
                 locationManager.requestLocationUpdates(
                     provider,
-                    2_000L,
-                    1f,
+                    500L,
+                    0.1f,
                     distanceLocationListener!!,
                     mainLooper
                 )
