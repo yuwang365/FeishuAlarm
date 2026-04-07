@@ -47,7 +47,7 @@
             android:name=".service.AlarmService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="location|specialUse">
+            android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Feishu alarm monitoring to prevent process death" />

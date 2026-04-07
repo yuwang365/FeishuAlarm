@@ -17,10 +17,12 @@ import androidx.core.app.NotificationCompat
 import com.ai.feishualarm.R
 import com.ai.feishualarm.ui.page.MainActivity
 import androidx.core.net.toUri
+import java.time.LocalTime
 
 object AlarmActionHandler {
     private const val TAG = "AlarmActionHandler"
     private const val REMINDER_CHANNEL_ID = "FeishuReminderChannel_v9"
+    private const val REMINDER_CHANNEL_COMMON_ID = "FeishuReminderChannel_common_v1"
     private const val NOTIFICATION_ID = 2
     private const val ALARM_PREFS = "AlarmPrefs"
     private const val PENDING_OPEN_FEISHU_KEY = "PENDING_OPEN_FEISHU"
@@ -36,27 +38,28 @@ object AlarmActionHandler {
         if (isLocked) {
             val prefs = appContext.getSharedPreferences(ALARM_PREFS, Context.MODE_PRIVATE)
             prefs.edit().putBoolean(PENDING_OPEN_FEISHU_KEY, true).apply()
-            sendReminderNotification(appContext, alarmTime)
+            sendReminderNotification(appContext, alarmTime, defaultSound = LocalTime.now().hour >= 12)
         } else {
             FeishuLauncher.openFeishu(appContext)
         }
     }
 
-    fun sendReminderNotification(context: Context, time: String) {
+    fun sendReminderNotification(context: Context, time: String,defaultSound: Boolean) {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 //        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-        val soundUri = ("android.resource://" + context.packageName + "/" + R.raw.alarm2).toUri()
-
+        val soundUri = if(defaultSound)
+            RingtoneManager.getDefaultUri (RingtoneManager.TYPE_NOTIFICATION)
+        else (("android.resource://" + context.packageName + "/" + R.raw.alarm2).toUri())
+        val channelId = if(defaultSound) REMINDER_CHANNEL_COMMON_ID else REMINDER_CHANNEL_ID
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                REMINDER_CHANNEL_ID,
+                channelId,
                 "打卡提醒通知",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "进入打卡范围后的提醒通知"
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-
                 val audioAttributes = AudioAttributes.Builder()
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .setUsage(AudioAttributes.USAGE_ALARM)
