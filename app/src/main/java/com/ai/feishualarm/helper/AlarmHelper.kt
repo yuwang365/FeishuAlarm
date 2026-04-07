@@ -15,12 +15,13 @@ object AlarmHelper {
 
     fun getAlarmTimes(context: Context): List<String> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getStringSet(ALARM_TIMES_KEY, setOf("09:25"))?.toList()?.sorted() ?: listOf("09:25")
+        return prefs.getStringSet(ALARM_TIMES_KEY, setOf())?.toList()?.sorted() ?: listOf()
     }
 
     fun addAlarmTime(context: Context, time: String) {
+        Log.i("wangyu","add Alarm: $time")
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val times = prefs.getStringSet(ALARM_TIMES_KEY, setOf("09:25"))?.toMutableSet() ?: mutableSetOf("09:25")
+        val times = prefs.getStringSet(ALARM_TIMES_KEY, setOf())?.toMutableSet() ?: mutableSetOf()
         if (times.add(time)) {
             prefs.edit().putStringSet(ALARM_TIMES_KEY, times).apply()
             scheduleAllAlarms(context)
@@ -29,7 +30,7 @@ object AlarmHelper {
 
     fun removeAlarmTime(context: Context, time: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val times = prefs.getStringSet(ALARM_TIMES_KEY, setOf("09:25"))?.toMutableSet() ?: mutableSetOf("09:25")
+        val times = prefs.getStringSet(ALARM_TIMES_KEY, setOf())?.toMutableSet() ?: mutableSetOf()
         if (times.remove(time)) {
             prefs.edit().putStringSet(ALARM_TIMES_KEY, times).apply()
             cancelAlarm(context, time)

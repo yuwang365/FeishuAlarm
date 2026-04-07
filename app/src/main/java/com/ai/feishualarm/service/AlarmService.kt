@@ -1,6 +1,5 @@
 package com.ai.feishualarm.service
 
-import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -9,37 +8,51 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
-import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.ai.feishualarm.helper.AlarmActionHandler
-import com.ai.feishualarm.helper.LocationHelper
+import com.ai.feishualarm.helper.WifiNetworkHelper
 import com.ai.feishualarm.R
 import com.ai.feishualarm.receiver.UnlockReceiver
 
 class AlarmService : Service() {
 
     private var unlockReceiver: UnlockReceiver? = null
-    private var locationManager: LocationManager? = null
-    private var locationListener: LocationListener? = null
+    private var connectivityManager: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingAlarmTime: String? = null
+    private val wifiRetryIntervalMs = 15_000L
+    private val wifiRetryRunnable = object : Runnable {
+        override fun run() {
+            val t = pendingAlarmTime
+            if (!t.isNullOrBlank()) {
+                tryCompleteAlarmIfOnWifi(t)
+                if (pendingAlarmTime != null) {
+                    mainHandler.postDelayed(this, wifiRetryIntervalMs)
+                }
+            }
+        }
+    }
 
     companion object {
         private const val CHANNEL_ID = "FeishuAlarmServiceChannel"
         private const val NOTIFICATION_ID = 1
-        private const val ACTION_START_MONITORING = "com.ai.feishualarm.action.START_MONITORING"
+        private const val ACTION_START_WIFI_MONITORING = "com.ai.feishualarm.action.START_WIFI_MONITORING"
         private const val ACTION_STOP_MONITORING = "com.ai.feishualarm.action.STOP_MONITORING"
         private const val EXTRA_ALARM_TIME = "extra_alarm_time"
 
-        fun startLocationMonitoring(context: Context, alarmTime: String) {
+        fun startWifiMonitoring(context: Context, alarmTime: String) {
             val intent = Intent(context, AlarmService::class.java).apply {
-                action = ACTION_START_MONITORING
+                action = ACTION_START_WIFI_MONITORING
                 putExtra(EXTRA_ALARM_TIME, alarmTime)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -59,26 +72,29 @@ class AlarmService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val alarmTime = intent?.getStringExtra(EXTRA_ALARM_TIME)
         val notification = when (intent?.action) {
-            ACTION_START_MONITORING -> createNotification("未进入打卡范围，正在实时监控位置", true)
-            ACTION_STOP_MONITORING -> createNotification("已关闭位置监控")
+            ACTION_START_WIFI_MONITORING -> createNotification(
+                "未连接 ${WifiNetworkHelper.TARGET_SSID} WiFi，正在等待连接…",
+                true
+            )
+            ACTION_STOP_MONITORING -> createNotification("已关闭 WiFi 监控")
             else -> createNotification()
         }
         startForeground(NOTIFICATION_ID, notification)
 
         if (intent?.action == ACTION_STOP_MONITORING) {
-            stopRealtimeLocationMonitoring()
-            return START_STICKY
+            stopWifiMonitoringInternal()
+            return START_NOT_STICKY
         }
 
-        if (intent?.action == ACTION_START_MONITORING && !alarmTime.isNullOrBlank()) {
-            startRealtimeLocationMonitoring(alarmTime)
+        if (intent?.action == ACTION_START_WIFI_MONITORING && !alarmTime.isNullOrBlank()) {
+            startWifiMonitoringInternal(alarmTime)
         }
 
         return START_STICKY
     }
 
     override fun onDestroy() {
-        stopRealtimeLocationMonitoring()
+        stopWifiMonitoringInternal()
         unregisterUnlockReceiver()
         super.onDestroy()
     }
@@ -143,136 +159,75 @@ class AlarmService : Service() {
         )
     }
 
-    private fun startRealtimeLocationMonitoring(alarmTime: String) {
-        val targetLocation = LocationHelper.getTargetLocation(this)
-        if (targetLocation == null) {
-            Log.w("AlarmService", "Target location missing, trigger directly.")
-            AlarmActionHandler.triggerOpenOrNotify(this, alarmTime)
-            stopRealtimeLocationMonitoring()
-            return
-        }
+    private fun startWifiMonitoringInternal(alarmTime: String) {
+        stopWifiMonitoringInternal()
+        pendingAlarmTime = alarmTime
+        updateForegroundNotification("未连接 ${WifiNetworkHelper.TARGET_SSID} WiFi，正在等待连接…", true)
 
-        val hasFineLocation = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val hasCoarseLocation = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!hasFineLocation && !hasCoarseLocation) {
-            Log.w("AlarmService", "Location permission missing, trigger directly.")
-            AlarmActionHandler.triggerOpenOrNotify(this, alarmTime)
-            stopRealtimeLocationMonitoring()
-            return
-        }
+        tryCompleteAlarmIfOnWifi(alarmTime)
 
-        stopRealtimeLocationMonitoring()
-        updateForegroundNotification("未进入打卡范围，正在实时监控位置", true)
-        val manager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        locationManager = manager
-
-        val providers = buildList {
-            if (manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                add(LocationManager.NETWORK_PROVIDER)
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        connectivityManager = cm
+        val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .build()
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                mainHandler.post { tryCompleteAlarmIfOnWifi(alarmTime) }
             }
-            if (manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                add(LocationManager.GPS_PROVIDER)
+
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                mainHandler.post { tryCompleteAlarmIfOnWifi(alarmTime) }
             }
-        }
-        if (providers.isEmpty()) {
-            Log.w("AlarmService", "No enabled location provider, trigger directly.")
-            AlarmActionHandler.triggerOpenOrNotify(this, alarmTime)
-            stopRealtimeLocationMonitoring()
-            return
-        }
 
-        var alarmHandled = false
-        val handleLocation: (Location) -> Unit = { location ->
-            val targetDistance = LocationHelper.getTargetDistance(this)
-            val result = FloatArray(1)
-            Location.distanceBetween(
-                location.latitude,
-                location.longitude,
-                targetLocation.first,
-                targetLocation.second,
-                result
-            )
-            val distanceMeters = result[0]
-            updateForegroundNotification(
-                "距离目标打卡点 %.1f 米".format(distanceMeters),
-                true
-            )
-            val isWithinRange = distanceMeters <= targetDistance
-            Log.d(
-                "AlarmService",
-                "Realtime location update, distance=$distanceMeters, within range: $isWithinRange"
-            )
-
-            if (isWithinRange) {
-                alarmHandled = true
-                AlarmActionHandler.triggerOpenOrNotify(this, alarmTime)
-                stopRealtimeLocationMonitoring()
-                updateForegroundNotification("已进入打卡范围", false)
-            }
-        }
-
-        providers.asSequence()
-            .mapNotNull { provider ->
-                try {
-                    manager.getLastKnownLocation(provider)
-                } catch (_: SecurityException) {
-                    null
+            override fun onLost(network: Network) {
+                mainHandler.post {
+                    updateForegroundNotification(
+                        "未连接 ${WifiNetworkHelper.TARGET_SSID} WiFi，正在等待连接…",
+                        true
+                    )
                 }
             }
-            .minByOrNull { it.accuracy }
-            ?.let(handleLocation)
-        if (alarmHandled) {
+        }
+        networkCallback = callback
+        cm.registerNetworkCallback(request, callback)
+        mainHandler.postDelayed(wifiRetryRunnable, wifiRetryIntervalMs)
+    }
+
+    private fun tryCompleteAlarmIfOnWifi(alarmTime: String) {
+        if (!WifiNetworkHelper.hasWifiSsidReadPermission(this)) {
+            Log.w("AlarmService", "Still waiting: no permission to read WiFi SSID")
+            updateForegroundNotification(
+                "无法读取 WiFi 名称，请在应用内授予附近设备或位置权限",
+                true
+            )
+            return
+        }
+        if (!WifiNetworkHelper.isConnectedToTargetWifi(this)) {
+            Log.d("AlarmService", "Still not on ${WifiNetworkHelper.TARGET_SSID}")
             return
         }
 
-        locationListener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                handleLocation(location)
-            }
-
-            @Deprecated("Deprecated in Java")
-            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-
-            override fun onProviderEnabled(provider: String) {
-                Log.d("AlarmService", "Provider enabled: $provider")
-            }
-
-            override fun onProviderDisabled(provider: String) {
-                Log.w("AlarmService", "Provider disabled: $provider")
-            }
-        }
-
-        try {
-            providers.forEach { provider ->
-                manager.requestLocationUpdates(
-                    provider,
-                    1_000L,
-                    0.1f,
-                    locationListener!!,
-                    mainLooper
-                )
-            }
-        } catch (e: SecurityException) {
-            Log.e("AlarmService", "Failed to request location updates", e)
-            AlarmActionHandler.triggerOpenOrNotify(this, alarmTime)
-            stopRealtimeLocationMonitoring()
-        }
+        Log.d("AlarmService", "Connected to ${WifiNetworkHelper.TARGET_SSID}, triggering alarm flow")
+        pendingAlarmTime = null
+        stopWifiMonitoringInternal()
+        AlarmActionHandler.triggerOpenOrNotify(this, alarmTime)
+        updateForegroundNotification("已连接到 ${WifiNetworkHelper.TARGET_SSID}", false)
     }
 
-    private fun stopRealtimeLocationMonitoring() {
-        val manager = locationManager
-        val listener = locationListener
-        if (manager != null && listener != null) {
-            manager.removeUpdates(listener)
+    private fun stopWifiMonitoringInternal() {
+        mainHandler.removeCallbacks(wifiRetryRunnable)
+        val cm = connectivityManager
+        val cb = networkCallback
+        if (cm != null && cb != null) {
+            try {
+                cm.unregisterNetworkCallback(cb)
+            } catch (_: Exception) {
+            }
         }
-        locationManager = null
-        locationListener = null
+        connectivityManager = null
+        networkCallback = null
+        pendingAlarmTime = null
     }
 
     private fun createNotificationChannel() {
