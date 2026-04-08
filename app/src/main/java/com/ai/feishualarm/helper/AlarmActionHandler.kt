@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
@@ -93,7 +94,7 @@ object AlarmActionHandler {
         }
 
         val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_notification_alarm)
             .setContentTitle("打卡时间到了！($time)")
             .setContentText("已连接 ${WifiNetworkHelper.TARGET_SSID} WiFi，解锁后自动打开飞书")
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -142,7 +143,7 @@ object AlarmActionHandler {
         )
 
         val notification = NotificationCompat.Builder(appContext, WAIT_WIFI_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_notification_alarm)
             .setContentTitle("打卡时间到了！($time)")
             .setContentText("请连接 WiFi「${WifiNetworkHelper.TARGET_SSID}」，连接后将自动打开飞书")
             .setPriority(NotificationCompat.PRIORITY_MAX)

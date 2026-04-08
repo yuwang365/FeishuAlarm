@@ -2,8 +2,10 @@ package com.ai.feishualarm.ui.page
 
 import android.Manifest
 import android.app.TimePickerDialog
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -60,6 +62,18 @@ import com.ai.feishualarm.ui.theme.FeishuAlarmTheme
 import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
+    private var isWifiMonitoringActive by mutableStateOf(false)
+
+    private val monitoringStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AlarmService.ACTION_MONITORING_STATE_CHANGED) {
+                isWifiMonitoringActive = intent.getBooleanExtra(
+                    AlarmService.EXTRA_IS_MONITORING,
+                    AlarmService.isWifiMonitoringActive(this@MainActivity)
+                )
+            }
+        }
+    }
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -83,15 +97,33 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Log.i("wangyu","MainActivity Create")
         enableEdgeToEdge()
+        isWifiMonitoringActive = AlarmService.isWifiMonitoringActive(this)
         initUI()
         val currentTimes = AlarmHelper.getAlarmTimes(this)
         if (!currentTimes.contains("09:15")) {
             AlarmHelper.addAlarmTime(this, "09:15")
+            AlarmHelper.addAlarmTime(this, "18:50")
         }
 
         requestWifiRelatedPermissions()
         startAlarmService()
         AlarmHelper.scheduleAllAlarms(this)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        isWifiMonitoringActive = AlarmService.isWifiMonitoringActive(this)
+        ContextCompat.registerReceiver(
+            this,
+            monitoringStateReceiver,
+            IntentFilter(AlarmService.ACTION_MONITORING_STATE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    override fun onStop() {
+        unregisterReceiver(monitoringStateReceiver)
+        super.onStop()
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -119,12 +151,17 @@ class MainActivity : ComponentActivity() {
                     MainScreen(
                         modifier = Modifier.padding(innerPadding),
                         alarmTimes = alarmTimes,
+                        isWifiMonitoringActive = isWifiMonitoringActive,
                         onDeleteTime = { time ->
                             AlarmHelper.removeAlarmTime(this, time)
                             alarmTimes = AlarmHelper.getAlarmTimes(this)
                         },
                         onOpenFeishu = { FeishuLauncher.openFeishu(this) },
-                        onRequestPermissions = { requestWifiRelatedPermissions() }
+                        onRequestPermissions = { requestWifiRelatedPermissions() },
+                        onStopMonitoring = {
+                            AlarmService.stopMonitoring(this)
+                            isWifiMonitoringActive = false
+                        }
                     )
                 }
             }
@@ -250,9 +287,11 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(
     modifier: Modifier = Modifier,
     alarmTimes: List<String>,
+    isWifiMonitoringActive: Boolean,
     onDeleteTime: (String) -> Unit,
     onOpenFeishu: () -> Unit,
-    onRequestPermissions: () -> Unit
+    onRequestPermissions: () -> Unit,
+    onStopMonitoring: () -> Unit
 ) {
     Column(
         modifier = modifier
@@ -301,6 +340,17 @@ fun MainScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        if (isWifiMonitoringActive) {
+            OutlinedButton(
+                onClick = onStopMonitoring,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("停止 WiFi 监测")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         OutlinedButton(
             onClick = onRequestPermissions,

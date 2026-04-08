@@ -48,7 +48,11 @@ class AlarmService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val ACTION_START_WIFI_MONITORING = "com.ai.feishualarm.action.START_WIFI_MONITORING"
         private const val ACTION_STOP_MONITORING = "com.ai.feishualarm.action.STOP_MONITORING"
+        const val ACTION_MONITORING_STATE_CHANGED = "com.ai.feishualarm.action.MONITORING_STATE_CHANGED"
+        const val EXTRA_IS_MONITORING = "extra_is_monitoring"
         private const val EXTRA_ALARM_TIME = "extra_alarm_time"
+        private const val PREFS_NAME = "AlarmServicePrefs"
+        private const val KEY_WIFI_MONITORING_ACTIVE = "wifi_monitoring_active"
 
         fun startWifiMonitoring(context: Context, alarmTime: String) {
             val intent = Intent(context, AlarmService::class.java).apply {
@@ -60,6 +64,22 @@ class AlarmService : Service() {
             } else {
                 context.startService(intent)
             }
+        }
+
+        fun stopMonitoring(context: Context) {
+            val intent = Intent(context, AlarmService::class.java).apply {
+                action = ACTION_STOP_MONITORING
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        fun isWifiMonitoringActive(context: Context): Boolean {
+            val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getBoolean(KEY_WIFI_MONITORING_ACTIVE, false)
         }
     }
 
@@ -83,7 +103,7 @@ class AlarmService : Service() {
 
         if (intent?.action == ACTION_STOP_MONITORING) {
             stopWifiMonitoringInternal()
-            return START_NOT_STICKY
+            return START_STICKY
         }
 
         if (intent?.action == ACTION_START_WIFI_MONITORING && !alarmTime.isNullOrBlank()) {
@@ -123,7 +143,7 @@ class AlarmService : Service() {
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("飞书打卡监控")
             .setContentText(contentText)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_notification_alarm)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOnlyAlertOnce(true)
             .setOngoing(showStopAction)
@@ -159,9 +179,18 @@ class AlarmService : Service() {
         )
     }
 
+    private fun updateMonitoringState(isMonitoring: Boolean) {
+        val prefs = applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_WIFI_MONITORING_ACTIVE, isMonitoring).apply()
+        sendBroadcast(
+            Intent(ACTION_MONITORING_STATE_CHANGED).putExtra(EXTRA_IS_MONITORING, isMonitoring)
+        )
+    }
+
     private fun startWifiMonitoringInternal(alarmTime: String) {
         stopWifiMonitoringInternal()
         pendingAlarmTime = alarmTime
+        updateMonitoringState(true)
         updateForegroundNotification("未连接 ${WifiNetworkHelper.TARGET_SSID} WiFi，正在等待连接…", true)
 
         tryCompleteAlarmIfOnWifi(alarmTime)
@@ -228,6 +257,7 @@ class AlarmService : Service() {
         connectivityManager = null
         networkCallback = null
         pendingAlarmTime = null
+        updateMonitoringState(false)
     }
 
     private fun createNotificationChannel() {
