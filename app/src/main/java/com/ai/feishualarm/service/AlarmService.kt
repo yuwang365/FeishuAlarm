@@ -144,7 +144,7 @@ class AlarmService : Service() {
             .setContentTitle("飞书打卡监控")
             .setContentText(contentText)
             .setSmallIcon(R.mipmap.ic_notification_alarm)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOnlyAlertOnce(true)
             .setOngoing(showStopAction)
 
@@ -265,7 +265,7 @@ class AlarmService : Service() {
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID,
                 "Feishu Alarm Foreground Service Channel",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_HIGH
             )
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(serviceChannel)

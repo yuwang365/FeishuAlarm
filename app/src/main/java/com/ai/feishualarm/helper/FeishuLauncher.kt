@@ -1,5 +1,6 @@
 package com.ai.feishualarm.helper
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -14,6 +15,9 @@ object FeishuLauncher {
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             context.startActivity(launchIntent)
             Log.d("FeishuLauncher", "Feishu opened successfully")
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            // 清除该应用之前发送的所有通知
+            notificationManager.cancelAll()
         } else {
             val errorMsg = "未找到飞书应用，请检查是否安装"
             Log.e("FeishuLauncher", errorMsg)
