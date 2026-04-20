@@ -15,7 +15,7 @@ class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action
         Log.d("AlarmReceiver", "Received action: $action")
-
+        AlarmService.justStartForegroundService(context)
         if (action == Intent.ACTION_BOOT_COMPLETED) {
             AlarmHelper.scheduleAllAlarms(context)
             return
@@ -34,6 +34,8 @@ class AlarmReceiver : BroadcastReceiver() {
             }
         } else {
             Log.d("AlarmReceiver", "It's weekend, skipping.")
+            //更新激活一下前台服务
+
         }
 
         AlarmHelper.scheduleAllAlarms(context)

@@ -54,6 +54,11 @@ class AlarmService : Service() {
         private const val PREFS_NAME = "AlarmServicePrefs"
         private const val KEY_WIFI_MONITORING_ACTIVE = "wifi_monitoring_active"
 
+        fun justStartForegroundService(context: Context) {
+            val intent = Intent(context, AlarmService::class.java)
+            context.startForegroundService(intent)
+        }
+
         fun startWifiMonitoring(context: Context, alarmTime: String) {
             val intent = Intent(context, AlarmService::class.java).apply {
                 action = ACTION_START_WIFI_MONITORING

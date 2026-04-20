@@ -274,12 +274,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startAlarmService() {
-        val intent = Intent(this, AlarmService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        AlarmService.justStartForegroundService(this)
     }
 }
 
